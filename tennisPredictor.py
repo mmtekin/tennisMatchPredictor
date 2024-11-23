@@ -19,23 +19,51 @@ def get_player_stats(data):
     """
     # Extract winner stats
     winner_stats = data[
-        ["winner_name", "winner_rank", "winner_age", "winner_ht"]
+        [
+            "winner_name",
+            "winner_rank",
+            "winner_age",
+            "winner_ht",
+            "w_ace",
+            "w_df",
+            "w_bpSaved",
+            "w_bpFaced",
+        ]
     ].rename(
         columns={
             "winner_name": "player_name",
             "winner_rank": "player_rank",
             "winner_age": "player_age",
             "winner_ht": "player_ht",
+            "w_ace": "player_ace",
+            "w_df": "player_df",
+            "w_bpSaved": "player_bpSaved",
+            "w_bpFaced": "player_bpFaced",
         }
     )
 
     # Extract loser stats
-    loser_stats = data[["loser_name", "loser_rank", "loser_age", "loser_ht"]].rename(
+    loser_stats = data[
+        [
+            "loser_name",
+            "loser_rank",
+            "loser_age",
+            "loser_ht",
+            "l_ace",
+            "l_df",
+            "l_bpSaved",
+            "l_bpFaced",
+        ]
+    ].rename(
         columns={
             "loser_name": "player_name",
             "loser_rank": "player_rank",
             "loser_age": "player_age",
             "loser_ht": "player_ht",
+            "l_ace": "player_ace",
+            "l_df": "player_df",
+            "l_bpSaved": "player_bpSaved",
+            "l_bpFaced": "player_bpFaced",
         }
     )
 
@@ -47,11 +75,25 @@ def get_player_stats(data):
         subset=["player_rank", "player_age", "player_ht"]
     )
 
+    # Convert stats to numeric
+    numeric_cols = [
+        "player_rank",
+        "player_age",
+        "player_ht",
+        "player_ace",
+        "player_df",
+        "player_bpSaved",
+        "player_bpFaced",
+    ]
+    player_stats[numeric_cols] = player_stats[numeric_cols].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    player_stats[numeric_cols] = player_stats[numeric_cols].fillna(0)
+
     # Get the latest stats for each player
-    # Below makes it so that each player's stats are their best stats for index 0 because we sort according to rank
     player_stats = player_stats.sort_values(by="player_rank")
     player_stats = player_stats.groupby("player_name").first().reset_index()
-    # Above makes it so that we only keep the first row for each player, which is the row with the lowest rank
+
     return player_stats
 
 
@@ -97,33 +139,51 @@ def preprocess_data(data):
         "winner_ht",
         "loser_ht",
         "surface",
+        "w_ace",
+        "l_ace",
+        "w_df",
+        "l_df",
+        "w_bpSaved",
+        "l_bpSaved",
+        "w_bpFaced",
+        "l_bpFaced",
     ]
     for col in required_columns:
         if col not in data.columns:
-            # This will only happen if our data is missing a column which should not occur unless data changes
             raise ValueError(f"Missing required column: {col}")
 
     # Clean the data by dropping rows with missing values
-    # This is unnecessary but why not make sure the data is clean
     data = data.dropna(subset=required_columns)
 
-    # Map surface types to numerical values
-    surface_map = {"Hard": 1, "Clay": 2, "Grass": 3}
-    data["surface_type"] = data["surface"].map(surface_map)
+    # One-hot encode the surface types
+    data = pd.get_dummies(data, columns=["surface"], prefix="surface")
 
-    # Drop rows with missing or unmapped surface values
-    data = data.dropna(subset=["surface_type"])
+    # Ensure all possible 'surface_*' columns are present
+    surface_cols = ["surface_Clay", "surface_Grass", "surface_Hard"]
+    for col in surface_cols:
+        if col not in data.columns:
+            data[col] = 0
 
-    # Create two copies of the data: one where the winner is Player 1, and one where the loser is Player 1
+    # Create two copies of the data: winner as Player 1 and loser as Player 1
     data_win = data.copy()
     data_win["player_1_name"] = data_win["winner_name"]
     data_win["player_1_rank"] = data_win["winner_rank"]
     data_win["player_1_age"] = data_win["winner_age"]
     data_win["player_1_ht"] = data_win["winner_ht"]
+    data_win["player_1_ace"] = data_win["w_ace"]
+    data_win["player_1_df"] = data_win["w_df"]
+    data_win["player_1_bpSaved"] = data_win["w_bpSaved"]
+    data_win["player_1_bpFaced"] = data_win["w_bpFaced"]
+
     data_win["player_2_name"] = data_win["loser_name"]
     data_win["player_2_rank"] = data_win["loser_rank"]
     data_win["player_2_age"] = data_win["loser_age"]
     data_win["player_2_ht"] = data_win["loser_ht"]
+    data_win["player_2_ace"] = data_win["l_ace"]
+    data_win["player_2_df"] = data_win["l_df"]
+    data_win["player_2_bpSaved"] = data_win["l_bpSaved"]
+    data_win["player_2_bpFaced"] = data_win["l_bpFaced"]
+
     data_win["target"] = 1  # Player 1 wins
 
     data_lose = data.copy()
@@ -131,22 +191,90 @@ def preprocess_data(data):
     data_lose["player_1_rank"] = data_lose["loser_rank"]
     data_lose["player_1_age"] = data_lose["loser_age"]
     data_lose["player_1_ht"] = data_lose["loser_ht"]
+    data_lose["player_1_ace"] = data_lose["l_ace"]
+    data_lose["player_1_df"] = data_lose["l_df"]
+    data_lose["player_1_bpSaved"] = data_lose["l_bpSaved"]
+    data_lose["player_1_bpFaced"] = data_lose["l_bpFaced"]
+
     data_lose["player_2_name"] = data_lose["winner_name"]
     data_lose["player_2_rank"] = data_lose["winner_rank"]
     data_lose["player_2_age"] = data_lose["winner_age"]
     data_lose["player_2_ht"] = data_lose["winner_ht"]
+    data_lose["player_2_ace"] = data_lose["w_ace"]
+    data_lose["player_2_df"] = data_lose["w_df"]
+    data_lose["player_2_bpSaved"] = data_lose["w_bpSaved"]
+    data_lose["player_2_bpFaced"] = data_lose["w_bpFaced"]
+
     data_lose["target"] = 0  # Player 1 loses
 
     # Combine the data
     data_all = pd.concat([data_win, data_lose], ignore_index=True)
 
+    # Ensure all 'surface_*' columns are present in data_all
+    for col in surface_cols:
+        if col not in data_all.columns:
+            data_all[col] = 0
+
+    # List of columns to convert to numeric
+    numeric_cols = [
+        "player_1_rank",
+        "player_2_rank",
+        "player_1_age",
+        "player_2_age",
+        "player_1_ht",
+        "player_2_ht",
+        "player_1_ace",
+        "player_2_ace",
+        "player_1_df",
+        "player_2_df",
+        "player_1_bpSaved",
+        "player_2_bpSaved",
+        "player_1_bpFaced",
+        "player_2_bpFaced",
+    ]
+    # Convert to numeric and handle errors
+    data_all[numeric_cols] = data_all[numeric_cols].apply(
+        pd.to_numeric, errors="coerce"
+    )
+
+    # Fill NaN values with 0
+    data_all[numeric_cols] = data_all[numeric_cols].fillna(0)
+
     # Calculate feature differences (Player 1 - Player 2)
     data_all["rank_diff"] = data_all["player_1_rank"] - data_all["player_2_rank"]
     data_all["age_diff"] = data_all["player_1_age"] - data_all["player_2_age"]
     data_all["height_diff"] = data_all["player_1_ht"] - data_all["player_2_ht"]
+    data_all["ace_diff"] = data_all["player_1_ace"] - data_all["player_2_ace"]
+    data_all["df_diff"] = data_all["player_1_df"] - data_all["player_2_df"]
+    data_all["bp_saved_diff"] = (
+        data_all["player_1_bpSaved"] - data_all["player_2_bpSaved"]
+    )
+    data_all["bp_faced_diff"] = (
+        data_all["player_1_bpFaced"] - data_all["player_2_bpFaced"]
+    )
 
-    # Select features
-    features = ["rank_diff", "age_diff", "height_diff", "surface_type"]
+    # Create interaction terms
+    data_all["rank_surface_clay"] = data_all["rank_diff"] * data_all["surface_Clay"]
+    data_all["rank_surface_grass"] = data_all["rank_diff"] * data_all["surface_Grass"]
+    data_all["rank_surface_hard"] = data_all["rank_diff"] * data_all["surface_Hard"]
+
+    # Update the features list
+    features = [
+        "rank_diff",
+        "age_diff",
+        "height_diff",
+        "ace_diff",
+        "df_diff",
+        "bp_saved_diff",
+        "bp_faced_diff",
+        "surface_Clay",
+        "surface_Grass",
+        "surface_Hard",
+        "rank_surface_clay",
+        "rank_surface_grass",
+        "rank_surface_hard",
+    ]
+
     X = data_all[features]
     y = data_all["target"]
 
@@ -218,28 +346,69 @@ def predict_winner(player_stats, model, player_1_name, player_2_name, surface):
     if player_1.empty or player_2.empty:
         return "Error: One or both players not found in the dataset."
 
-    # Calculate feature differences (Player 1 - Player 2)
+    # Calculate feature differences
     rank_diff = player_1["player_rank"].values[0] - player_2["player_rank"].values[0]
     age_diff = player_1["player_age"].values[0] - player_2["player_age"].values[0]
     height_diff = player_1["player_ht"].values[0] - player_2["player_ht"].values[0]
+    ace_diff = player_1["player_ace"].values[0] - player_2["player_ace"].values[0]
+    df_diff = player_1["player_df"].values[0] - player_2["player_df"].values[0]
+    bp_saved_diff = (
+        player_1["player_bpSaved"].values[0] - player_2["player_bpSaved"].values[0]
+    )
+    bp_faced_diff = (
+        player_1["player_bpFaced"].values[0] - player_2["player_bpFaced"].values[0]
+    )
 
-    # Map surface type to a numerical value
-    surface_map = {"Hard": 1, "Clay": 2, "Grass": 3}
-    surface_type = surface_map.get(surface, None)
-    if surface_type is None:
-        return "Error: Invalid surface type. Please enter 'Hard', 'Clay', or 'Grass'."
+    # One-hot encode the surface type
+    surface_types = ["Clay", "Grass", "Hard"]
+    surface_features = {f"surface_{s}": int(surface == s) for s in surface_types}
 
-    # Prepare input feature for the model
+    # Ensure all surface features are present
+    for col in ["surface_Clay", "surface_Grass", "surface_Hard"]:
+        if col not in surface_features:
+            surface_features[col] = 0
+
+    # Interaction terms
+    rank_surface_clay = rank_diff * surface_features["surface_Clay"]
+    rank_surface_grass = rank_diff * surface_features["surface_Grass"]
+    rank_surface_hard = rank_diff * surface_features["surface_Hard"]
+
+    # Prepare input features
     match_features = pd.DataFrame(
         [
             {
                 "rank_diff": rank_diff,
                 "age_diff": age_diff,
                 "height_diff": height_diff,
-                "surface_type": surface_type,
+                "ace_diff": ace_diff,
+                "df_diff": df_diff,
+                "bp_saved_diff": bp_saved_diff,
+                "bp_faced_diff": bp_faced_diff,
+                **surface_features,
+                "rank_surface_clay": rank_surface_clay,
+                "rank_surface_grass": rank_surface_grass,
+                "rank_surface_hard": rank_surface_hard,
             }
         ]
     )
+
+    # Ensure feature columns match the training features
+    expected_features = [
+        "rank_diff",
+        "age_diff",
+        "height_diff",
+        "ace_diff",
+        "df_diff",
+        "bp_saved_diff",
+        "bp_faced_diff",
+        "surface_Clay",
+        "surface_Grass",
+        "surface_Hard",
+        "rank_surface_clay",
+        "rank_surface_grass",
+        "rank_surface_hard",
+    ]
+    match_features = match_features[expected_features]
 
     # Handle missing values
     match_features = match_features.fillna(0)
@@ -261,10 +430,10 @@ def main():
 
     # Preprocess the data
     X, y = preprocess_data(data)
-    print("Features (X) sample:")
-    print(X.head())
-    print("Target (y) sample:")
-    print(y.head())
+    # print("Features (X) sample:")
+    # print(X.head())
+    # print("Target (y) sample:")
+    # print(y.head())
 
     # Get player stats
     player_stats = get_player_stats(data)
