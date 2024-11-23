@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
+
 def get_player_stats(data):
     """
     Aggregate player statistics into a single DataFrame.
@@ -47,9 +48,10 @@ def get_player_stats(data):
     )
 
     # Get the latest stats for each player
+    # Below makes it so that each player's stats are their best stats for index 0 because we sort according to rank
     player_stats = player_stats.sort_values(by="player_rank")
     player_stats = player_stats.groupby("player_name").first().reset_index()
-
+    # Above makes it so that we only keep the first row for each player, which is the row with the lowest rank
     return player_stats
 
 
@@ -69,7 +71,10 @@ def load_data(url):
         data = pd.read_csv(csv_data)
         return data
     else:
-        raise Exception(f"Failed to fetch data. HTTP Status Code: {response.status_code}")
+        raise Exception(
+            f"Failed to fetch data. HTTP Status Code: {response.status_code}"
+        )
+
 
 # Step 2: Preprocess the data
 def preprocess_data(data):
@@ -95,9 +100,11 @@ def preprocess_data(data):
     ]
     for col in required_columns:
         if col not in data.columns:
+            # This will only happen if our data is missing a column which should not occur unless data changes
             raise ValueError(f"Missing required column: {col}")
 
     # Clean the data by dropping rows with missing values
+    # This is unnecessary but why not make sure the data is clean
     data = data.dropna(subset=required_columns)
 
     # Map surface types to numerical values
@@ -145,6 +152,7 @@ def preprocess_data(data):
 
     return X, y
 
+
 # Step 3: Split the data into training and testing sets
 def split_data(X, y):
     """
@@ -157,6 +165,7 @@ def split_data(X, y):
         tuple: Training and testing datasets.
     """
     return train_test_split(X, y, test_size=0.2, random_state=42)
+
 
 # Step 4: Train the model
 def train_model(X_train, y_train):
@@ -172,6 +181,7 @@ def train_model(X_train, y_train):
     model = RandomForestClassifier(random_state=42, n_estimators=100)
     model.fit(X_train, y_train)
     return model
+
 
 # Step 5: Evaluate the model
 def evaluate_model(model, X_test, y_test):
@@ -296,6 +306,7 @@ def main():
             player_stats, model, player_1_name, player_2_name, court_type
         )
         print(f"Prediction: {result}\n")
+
 
 if __name__ == "__main__":
     main()
